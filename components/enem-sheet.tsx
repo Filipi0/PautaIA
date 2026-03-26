@@ -1,7 +1,7 @@
-"use client"
+"use client";
 
-import { useState, useRef, useCallback, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
+import { useState, useRef, useCallback, useEffect } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Trash2,
   Download,
@@ -11,149 +11,191 @@ import {
   Type,
   AlignLeft,
   Hash,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
+  Sparkles,
+  Info,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
-} from "@/components/ui/tooltip"
+} from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 
-const TOTAL_LINES = 30
-const CHARS_PER_LINE = 79
+const TOTAL_LINES = 30;
+const CHARS_PER_LINE = 79;
 
-type StructureType = "intro" | "dev1" | "dev2" | "conclusion" | null
+type StructureType = "intro" | "dev1" | "dev2" | "conclusion" | null;
 
 interface LineStructure {
-  [key: number]: StructureType
+  [key: number]: StructureType;
 }
 
-const structureColors: Record<string, { bg: string; border: string; label: string }> = {
-  intro: { bg: "bg-blue-500/20", border: "border-l-blue-500", label: "Introdução" },
-  dev1: { bg: "bg-green-500/20", border: "border-l-green-500", label: "Desenvolvimento 1" },
-  dev2: { bg: "bg-amber-500/20", border: "border-l-amber-500", label: "Desenvolvimento 2" },
-  conclusion: { bg: "bg-purple-500/20", border: "border-l-purple-500", label: "Conclusão" },
-}
+const structureColors: Record<
+  string,
+  { bg: string; border: string; label: string }
+> = {
+  intro: {
+    bg: "bg-blue-500/20",
+    border: "border-l-blue-500",
+    label: "Introdução",
+  },
+  dev1: {
+    bg: "bg-green-500/20",
+    border: "border-l-green-500",
+    label: "Desenvolvimento 1",
+  },
+  dev2: {
+    bg: "bg-amber-500/20",
+    border: "border-l-amber-500",
+    label: "Desenvolvimento 2",
+  },
+  conclusion: {
+    bg: "bg-purple-500/20",
+    border: "border-l-purple-500",
+    label: "Conclusão",
+  },
+};
 
 export function EnemSheet() {
-  const [text, setText] = useState("")
-  const [darkMode, setDarkMode] = useState(false)
-  const [theme, setTheme] = useState("")
-  const [lineStructures, setLineStructures] = useState<LineStructure>({})
-  const [selectedStructure, setSelectedStructure] = useState<StructureType>(null)
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const sheetRef = useRef<HTMLDivElement>(null)
+  const [text, setText] = useState("");
+  const [darkMode, setDarkMode] = useState(false);
+  const [theme, setTheme] = useState("");
+  const [lineStructures, setLineStructures] = useState<LineStructure>({});
+  const [selectedStructure, setSelectedStructure] =
+    useState<StructureType>(null);
+  const [infoOpen, setInfoOpen] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const sheetRef = useRef<HTMLDivElement>(null);
 
-  const lines = text.split("\n")
-  const occupiedLines = lines.filter((line) => line.trim().length > 0).length
-  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0
-  const charCount = text.length
+  const lines = text.split("\n");
+  const occupiedLines = lines.filter((line) => line.trim().length > 0).length;
+  const wordCount = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const charCount = text.length;
 
   const handleTextChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const newText = e.target.value
-    let newLines = newText.split("\n")
-    
+    const newText = e.target.value;
+    let newLines = newText.split("\n");
+
     // Processar linhas que ultrapassam o limite de caracteres
-    const processedLines: string[] = []
+    const processedLines: string[] = [];
     for (let i = 0; i < newLines.length; i++) {
-      let line = newLines[i]
-      
+      let line = newLines[i];
+
       while (line.length > CHARS_PER_LINE) {
         // Encontrar o último espaço antes do limite para quebra de linha suave
-        let breakPoint = CHARS_PER_LINE
-        const lastSpace = line.lastIndexOf(" ", CHARS_PER_LINE)
-        
+        let breakPoint = CHARS_PER_LINE;
+        const lastSpace = line.lastIndexOf(" ", CHARS_PER_LINE);
+
         if (lastSpace > 0 && lastSpace > CHARS_PER_LINE - 20) {
-          breakPoint = lastSpace
+          breakPoint = lastSpace;
         }
-        
-        processedLines.push(line.substring(0, breakPoint))
-        line = line.substring(breakPoint).trimStart()
+
+        processedLines.push(line.substring(0, breakPoint));
+        line = line.substring(breakPoint).trimStart();
       }
-      
-      processedLines.push(line)
+
+      processedLines.push(line);
     }
-    
+
     // Verificar se não ultrapassou o limite total de linhas
     if (processedLines.length <= TOTAL_LINES) {
-      setText(processedLines.join("\n"))
+      setText(processedLines.join("\n"));
     }
-  }
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter") {
-      const currentLines = text.split("\n")
+      const currentLines = text.split("\n");
       if (currentLines.length >= TOTAL_LINES) {
-        e.preventDefault()
+        e.preventDefault();
       }
     }
 
     if (e.key === "Tab") {
-      e.preventDefault()
-      const textarea = e.currentTarget
-      const start = textarea.selectionStart
-      const end = textarea.selectionEnd
-      const indentSize = 4
-      const indent = " ".repeat(indentSize)
+      e.preventDefault();
+      const textarea = e.currentTarget;
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const indentSize = 4;
+      const indent = " ".repeat(indentSize);
 
-      const newText = text.substring(0, start) + indent + text.substring(end)
-      setText(newText)
+      const newText = text.substring(0, start) + indent + text.substring(end);
+      setText(newText);
 
       setTimeout(() => {
-        textarea.selectionStart = textarea.selectionEnd = start + indentSize
-      }, 0)
+        textarea.selectionStart = textarea.selectionEnd = start + indentSize;
+      }, 0);
     }
-  }
+  };
 
   const clearSheet = () => {
-    setText("")
-    setTheme("")
-    setLineStructures({})
-  }
+    setText("");
+    setLineStructures({});
+  };
 
   const toggleLineStructure = (lineIndex: number) => {
     if (selectedStructure) {
       setLineStructures((prev) => ({
         ...prev,
-        [lineIndex]: prev[lineIndex] === selectedStructure ? null : selectedStructure,
-      }))
+        [lineIndex]:
+          prev[lineIndex] === selectedStructure ? null : selectedStructure,
+      }));
     }
-  }
+  };
 
   const exportToPDF = useCallback(async () => {
-    if (!sheetRef.current) return
+    if (!sheetRef.current) return;
 
-    const html2canvas = (await import("html2canvas")).default
-    const jsPDF = (await import("jspdf")).default
+    const html2canvas = (await import("html2canvas")).default;
+    const jsPDF = (await import("jspdf")).default;
 
     const canvas = await html2canvas(sheetRef.current, {
       scale: 2,
       backgroundColor: darkMode ? "#1a1a1a" : "#faf8f5",
       logging: false,
-    })
+    });
 
-    const imgData = canvas.toDataURL("image/png")
+    const imgData = canvas.toDataURL("image/png");
     const pdf = new jsPDF({
       orientation: "portrait",
       unit: "mm",
       format: "a4",
-    })
+    });
 
-    const imgWidth = 210
-    const imgHeight = (canvas.height * imgWidth) / canvas.width
+    const imgWidth = 210;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
-    pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight)
-    pdf.save("redacao-enem.pdf")
-  }, [darkMode])
+    pdf.addImage(imgData, "PNG", 0, 0, imgWidth, imgHeight);
+    pdf.save("redacao-enem.pdf");
+  }, [darkMode]);
+
+  const handleAICorrection = () => {
+    if (!text.trim()) {
+      alert("Escreva sua redação antes de solicitar a correção com IA.");
+      return;
+    }
+    // Placeholder para integração futura com IA
+    alert(
+      "Funcionalidade de correção com IA em desenvolvimento. Em breve você poderá receber feedback detalhado sobre sua redação!",
+    );
+  };
 
   useEffect(() => {
     if (darkMode) {
-      document.documentElement.classList.add("dark")
+      document.documentElement.classList.add("dark");
     } else {
-      document.documentElement.classList.remove("dark")
+      document.documentElement.classList.remove("dark");
     }
-  }, [darkMode])
+  }, [darkMode]);
 
   return (
     <div
@@ -205,7 +247,11 @@ export function EnemSheet() {
               <Button
                 variant="outline"
                 onClick={clearSheet}
-                className={darkMode ? "border-zinc-600 text-zinc-300 hover:bg-zinc-800" : ""}
+                className={
+                  darkMode
+                    ? "border-zinc-600 text-zinc-300 hover:bg-zinc-800"
+                    : ""
+                }
               >
                 <Trash2 className="w-4 h-4 mr-2" />
                 Limpar
@@ -218,6 +264,115 @@ export function EnemSheet() {
                 <Download className="w-4 h-4 mr-2" />
                 Exportar PDF
               </Button>
+
+              <Button
+                onClick={handleAICorrection}
+                className={`${
+                  darkMode
+                    ? "bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-700 hover:to-indigo-700"
+                    : "bg-gradient-to-r from-violet-500 to-indigo-500 hover:from-violet-600 hover:to-indigo-600"
+                } text-white`}
+              >
+                <Sparkles className="w-4 h-4 mr-2" />
+                Correção com IA
+              </Button>
+
+              <Dialog open={infoOpen} onOpenChange={setInfoOpen}>
+                <DialogTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className={`rounded-full ${
+                      darkMode
+                        ? "text-zinc-400 hover:text-white hover:bg-zinc-700"
+                        : "text-stone-500 hover:text-stone-800 hover:bg-stone-200"
+                    }`}
+                    aria-label="Informações sobre o site"
+                  >
+                    <Info className="w-5 h-5" />
+                  </Button>
+                </DialogTrigger>
+                <DialogContent
+                  className={
+                    darkMode ? "bg-zinc-900 border-zinc-700 text-white" : ""
+                  }
+                >
+                  <DialogHeader>
+                    <DialogTitle
+                      className={`flex items-center gap-2 ${
+                        darkMode ? "text-white" : ""
+                      }`}
+                    >
+                      <FileText className="w-5 h-5" />
+                      Sobre o Simulador de Redação ENEM
+                    </DialogTitle>
+                    <DialogDescription
+                      className={darkMode ? "text-zinc-400" : ""}
+                    >
+                      Pratique sua redação no formato oficial do ENEM
+                    </DialogDescription>
+                  </DialogHeader>
+
+                  <div className="space-y-4 mt-2">
+                    <div>
+                      <h3
+                        className={`text-sm font-semibold mb-2 ${
+                          darkMode ? "text-zinc-200" : "text-stone-800"
+                        }`}
+                      >
+                        Funcionalidades
+                      </h3>
+                      <ul
+                        className={`text-sm space-y-1.5 ${
+                          darkMode ? "text-zinc-400" : "text-stone-600"
+                        }`}
+                      >
+                        <li>
+                          - Folha de redação com 30 linhas no formato oficial
+                        </li>
+                        <li>
+                          - Contagem de linhas, palavras e caracteres em tempo
+                          real
+                        </li>
+                        <li>
+                          - Marcadores de estrutura (Introdução,
+                          Desenvolvimento, Conclusão)
+                        </li>
+                        <li>- Exportação para PDF</li>
+                        <li>- Modo claro e escuro</li>
+                        <li>
+                          - Correção com Inteligência Artificial (em breve)
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div>
+                      <h3
+                        className={`text-sm font-semibold mb-2 ${
+                          darkMode ? "text-zinc-200" : "text-stone-800"
+                        }`}
+                      >
+                        Dicas para uma boa redação
+                      </h3>
+                      <ul
+                        className={`text-sm space-y-1.5 ${
+                          darkMode ? "text-zinc-400" : "text-stone-600"
+                        }`}
+                      >
+                        <li>
+                          - Escreva no mínimo 7 linhas (ideal: 20-30 linhas)
+                        </li>
+                        <li>
+                          - Siga a estrutura: Introdução, Desenvolvimento e
+                          Conclusão
+                        </li>
+                        <li>- Apresente uma proposta de intervenção clara</li>
+                        <li>- Respeite os direitos humanos</li>
+                      </ul>
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
             </div>
           </div>
         </motion.header>
@@ -255,7 +410,9 @@ export function EnemSheet() {
                     <button
                       key={type}
                       onClick={() =>
-                        setSelectedStructure(selectedStructure === type ? null : type)
+                        setSelectedStructure(
+                          selectedStructure === type ? null : type,
+                        )
                       }
                       className={`w-full text-left px-3 py-2 rounded-md text-sm transition-all border-l-4 ${
                         structureColors[type].border
@@ -263,13 +420,13 @@ export function EnemSheet() {
                         selectedStructure === type
                           ? structureColors[type].bg
                           : darkMode
-                          ? "bg-zinc-700 hover:bg-zinc-600"
-                          : "bg-stone-100 hover:bg-stone-200"
+                            ? "bg-zinc-700 hover:bg-zinc-600"
+                            : "bg-stone-100 hover:bg-stone-200"
                       } ${darkMode ? "text-zinc-200" : "text-stone-700"}`}
                     >
                       {structureColors[type].label}
                     </button>
-                  )
+                  ),
               )}
             </div>
 
@@ -278,7 +435,9 @@ export function EnemSheet() {
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 className={`text-xs mt-4 p-2 rounded ${
-                  darkMode ? "bg-zinc-700 text-zinc-300" : "bg-stone-100 text-stone-600"
+                  darkMode
+                    ? "bg-zinc-700 text-zinc-300"
+                    : "bg-stone-100 text-stone-600"
                 }`}
               >
                 Clique nos números das linhas para marcar como{" "}
@@ -302,24 +461,30 @@ export function EnemSheet() {
                 darkMode ? "bg-zinc-800" : "bg-white"
               }`}
             >
-              {/* Sheet Header - Theme Input */}
+              {/* Sheet Header */}
               <div
                 className={`px-6 py-4 border-b ${
-                  darkMode ? "border-zinc-700 bg-zinc-750" : "border-stone-200 bg-stone-50"
+                  darkMode
+                    ? "border-zinc-700 bg-zinc-750"
+                    : "border-stone-200 bg-stone-50"
                 }`}
               >
-                <input
-                  type="text"
-                  value={theme}
-                  onChange={(e) => setTheme(e.target.value)}
-                  placeholder="Digite o tema..."
-                  className={`w-full text-sm px-3 py-2 rounded border transition-colors font-semibold ${
-                    darkMode
-                      ? "bg-zinc-700 border-zinc-600 text-zinc-200 placeholder-zinc-500 focus:border-blue-400"
-                      : "bg-white border-stone-300 text-stone-700 placeholder-stone-400 focus:border-blue-500"
-                  } focus:outline-none`}
-                  aria-label="Tema da redação"
-                />
+                <div className="flex justify-between items-center">
+                  <span
+                    className={`text-xs font-medium uppercase tracking-wider ${
+                      darkMode ? "text-zinc-400" : "text-stone-500"
+                    }`}
+                  >
+                    Folha de Redação
+                  </span>
+                  <span
+                    className={`text-xs ${
+                      darkMode ? "text-zinc-400" : "text-stone-500"
+                    }`}
+                  >
+                    ENEM - Exame Nacional do Ensino Médio
+                  </span>
+                </div>
               </div>
 
               {/* Writing Area */}
@@ -328,8 +493,8 @@ export function EnemSheet() {
                 <div className="relative">
                   {Array.from({ length: TOTAL_LINES }, (_, i) => i + 1).map(
                     (lineNum) => {
-                      const structure = lineStructures[lineNum - 1]
-                      const hasText = lines[lineNum - 1]?.trim().length > 0
+                      const structure = lineStructures[lineNum - 1];
+                      const hasText = lines[lineNum - 1]?.trim().length > 0;
 
                       return (
                         <div
@@ -354,8 +519,8 @@ export function EnemSheet() {
                                       ? "text-blue-400"
                                       : "text-blue-600"
                                     : darkMode
-                                    ? "text-zinc-500"
-                                    : "text-stone-400"
+                                      ? "text-zinc-500"
+                                      : "text-stone-400"
                                 } ${selectedStructure ? "ring-2 ring-inset ring-transparent hover:ring-current rounded" : ""}`}
                               >
                                 {lineNum}
@@ -375,8 +540,8 @@ export function EnemSheet() {
                             }`}
                           /> */}
                         </div>
-                      )
-                    }
+                      );
+                    },
                   )}
 
                   {/* Textarea Overlay */}
@@ -387,7 +552,9 @@ export function EnemSheet() {
                     onKeyDown={handleKeyDown}
                     spellCheck={false}
                     className={`absolute inset-0 w-full h-full resize-none bg-transparent font-mono text-sm leading-[28px] pl-9 pr-2 py-0 focus:outline-none ${
-                      darkMode ? "text-zinc-200 caret-blue-400" : "text-stone-800 caret-blue-600"
+                      darkMode
+                        ? "text-zinc-200 caret-blue-400"
+                        : "text-stone-800 caret-blue-600"
                     }`}
                     style={{
                       lineHeight: "28px",
@@ -408,7 +575,9 @@ export function EnemSheet() {
               {/* Sheet Footer */}
               <div
                 className={`px-6 py-3 border-t ${
-                  darkMode ? "border-zinc-700 bg-zinc-750" : "border-stone-200 bg-stone-50"
+                  darkMode
+                    ? "border-zinc-700 bg-zinc-750"
+                    : "border-stone-200 bg-stone-50"
                 }`}
               >
                 <div className="flex justify-between items-center flex-wrap gap-2">
@@ -433,8 +602,8 @@ export function EnemSheet() {
                                   ? "text-green-400"
                                   : "text-green-600"
                                 : darkMode
-                                ? "text-amber-400"
-                                : "text-amber-600"
+                                  ? "text-amber-400"
+                                  : "text-amber-600"
                             }`}
                           >
                             {occupiedLines}
@@ -521,5 +690,5 @@ export function EnemSheet() {
         </div>
       </div>
     </div>
-  )
+  );
 }
