@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { AlignLeft, Save, Library } from "lucide-react";
+import { AlignLeft, Save, Library, Loader2 } from "lucide-react";
 import { StructureType, structureColors } from "./constants";
 
 interface StructureSidebarProps {
@@ -11,6 +11,7 @@ interface StructureSidebarProps {
   isSignedIn?: boolean;
   onSaveDraft: () => void;
   onViewEssays: () => void;
+  isCarregandoEdicao?: boolean; // <-- NOVA PROPRIEDADE AQUI
 }
 
 export function StructureSidebar({
@@ -20,6 +21,7 @@ export function StructureSidebar({
   isSignedIn,
   onSaveDraft,
   onViewEssays,
+  isCarregandoEdicao,
 }: StructureSidebarProps) {
   return (
     <motion.aside
@@ -105,17 +107,28 @@ export function StructureSidebar({
         <div className="space-y-2">
           <button
             onClick={onSaveDraft}
-            disabled={!isSignedIn}
+            // Desabilita se não tiver logado OU se estiver carregando a edição
+            disabled={!isSignedIn || isCarregandoEdicao} 
             className={`w-full flex items-center gap-2 px-3 py-2 rounded-md text-sm transition-all border border-transparent ${
-              !isSignedIn
+              !isSignedIn || isCarregandoEdicao
                 ? "opacity-50 cursor-not-allowed bg-stone-100 dark:bg-zinc-800 text-stone-400 dark:text-zinc-500"
                 : darkMode
                 ? "bg-zinc-700 hover:bg-zinc-600 text-zinc-200"
                 : "bg-stone-100 hover:bg-stone-200 text-stone-700"
             }`}
           >
-            <Save className="w-4 h-4" />
-            Salvar Rascunho
+            {/* Se estiver carregando, mostra o spinner. Se não, mostra o disquete */}
+            {isCarregandoEdicao ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Carregando...
+              </>
+            ) : (
+              <>
+                <Save className="w-4 h-4" />
+                Salvar Rascunho
+              </>
+            )}
           </button>
 
           <button

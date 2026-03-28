@@ -3,6 +3,11 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth, useSession, SignInButton, UserButton } from "@clerk/nextjs";
+import { useRouter, useSearchParams } from "next/navigation";
+
+// <-- IMPORTAÇÃO DO SERVIÇO AQUI -->
+import { redacaoService } from "@/services/redacaoService";
+
 import { SheetHeader } from "@/components/home/sheet-header";
 import { StructureSidebar } from "@/components/home/structure-sidebar";
 import { WritingArea } from "@/components/home/writing-area";
@@ -12,24 +17,28 @@ import {
   StructureType,
   LineStructure,
 } from "@/components/home/constants";
-import { useRouter } from "next/navigation"; // <-- 1. ADICIONE ESTA LINHA
 
 export function EnemSheet() {
-  const router = useRouter(); // <-- 2. ADICIONE ESTA LINHA
+  const router = useRouter();
+  const searchParams = useSearchParams(); // <-- CAPTURA A URL
+  const editId = searchParams.get("editId"); // <-- EXTRAI O ID, se existir
   // --- ESTADOS PRINCIPAIS ---
-  const [tema, setTema] = useState(""); // <-- ADICIONE O ESTADO DO TEMA AQUI
+  const [tema, setTema] = useState("");
   const [linhas, setLinhas] = useState<string[]>(Array(TOTAL_LINES).fill(""));
   const [alertasPorLinha, setAlertasPorLinha] = useState<Record<number, any[]>>(
     {},
   );
   const [darkMode, setDarkMode] = useState(false);
+  const [isCarregandoEdicao, setIsCarregandoEdicao] = useState(false); // Novo estado
   const [lineStructures, setLineStructures] = useState<LineStructure>({});
   const [selectedStructure, setSelectedStructure] =
     useState<StructureType>(null);
+
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const sheetRef = useRef<HTMLDivElement>(null);
   const { isSignedIn } = useAuth();
-  const { session } = useSession(); // <-- Adicione esta linha
+  const { session } = useSession();
+
   // --- ESTATÍSTICAS ---
   const occupiedLines = linhas.filter((line) => line.trim().length > 0).length;
   const wordCount = linhas
@@ -61,6 +70,13 @@ export function EnemSheet() {
             }),
           },
         );
+
+        if (!response.ok) {
+          const erroTexto = await response.text();
+          console.warn("Aviso do LanguageTool:", erroTexto);
+          return; // Para a execução silenciosamente sem quebrar a tela
+        }
+
         const data = await response.json();
 
         const novosAlertas: Record<number, any[]> = {};
@@ -118,7 +134,6 @@ export function EnemSheet() {
   };
 
   // --- FUNÇÕES DE PAINEL ---
-  // --- FUNÇÕES DE PAINEL ---
   const handleSaveDraft = async () => {
     if (!isSignedIn || !session) {
       alert("Você precisa fazer login para salvar rascunhos!");
@@ -133,37 +148,29 @@ export function EnemSheet() {
     }
 
     try {
-      // 1. Pega um token JWT novinho direto do Clerk (dura 60s)
       const token = await session.getToken();
 
-      // 2. Prepara o objeto (payload) igualzinho o Swagger pede
       const payload = {
-        tema: tema.trim(), // O tema que o usuário digitou
+        tema: tema.trim(),
         linhasFront: linhas,
         totalLinhas: occupiedLines,
         totalPalavras: wordCount,
         totalCaracteres: charCount,
-        structure_map: lineStructures, // Manda as marcações de introdução/conclusão
+        structure_map: lineStructures,
       };
 
-      // 3. Faz o POST para o seu backend Express
-      const response = await fetch("http://localhost:4000/redacoes", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`, // <- O crachá de segurança indo aqui!
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || "Erro ao salvar redação");
+      // VERIFICA SE TEM ID NA URL
+      if (editId) {
+        // Se tem ID, estamos editando -> Fazemos um PUT
+        await redacaoService.atualizar(token as string, editId, payload);
+        alert("✏️ Edição salva com sucesso!");
+      } else {
+        // Se não tem ID, é redação nova -> Fazemos um POST
+        await redacaoService.salvar(token as string, payload);
+        alert("🎉 Nova redação salva com sucesso!");
+        // Opcional: Redirecionar para o dashboard após salvar, ou limpar a folha
+        // router.push("/dashboard");
       }
-
-      alert("🎉 Redação salva com sucesso no banco Neon!");
-      console.log("Resposta do Backend:", data);
     } catch (error: any) {
       console.error("Erro no salvamento:", error);
       alert(`Falha ao salvar: ${error.message}`);
@@ -180,6 +187,7 @@ export function EnemSheet() {
 
   const clearSheet = () => {
     setLinhas(Array(TOTAL_LINES).fill(""));
+    setTema(""); // Garante que o tema também é limpo
     setLineStructures({});
     setAlertasPorLinha({});
   };
@@ -227,6 +235,47 @@ export function EnemSheet() {
     }
   }, [darkMode]);
 
+  // EFEITO: CARREGAR REDAÇÃO PARA EDIÇÃO
+  useEffect(() => {
+    async function carregarRedacao() {
+      if (editId && session) {
+        setIsCarregandoEdicao(true);
+        try {
+          const token = await session.getToken();
+          const pauta = await redacaoService.buscarPorId(
+            token as string,
+            editId,
+          );
+
+          // 1. Seta o tema
+          setTema(pauta.tema || "");
+
+          // 2. Transforma a string do banco ("linha1\nlinha2") de volta num array de 30 posições
+          const novasLinhas = Array(TOTAL_LINES).fill("");
+          if (pauta.corpo) {
+            const linhasDoBanco = pauta.corpo.split("\n");
+            linhasDoBanco.forEach((l: string, i: number) => {
+              if (i < TOTAL_LINES) novasLinhas[i] = l;
+            });
+          }
+          setLinhas(novasLinhas);
+
+          // 3. Puxa as cores de introdução/desenvolvimento
+          if (pauta.structure_map) {
+            setLineStructures(pauta.structure_map);
+          }
+        } catch (error) {
+          console.error("Erro ao carregar redação para edição:", error);
+          alert("Não foi possível carregar o rascunho.");
+        } finally {
+          setIsCarregandoEdicao(false);
+        }
+      }
+    }
+
+    carregarRedacao();
+  }, [editId, session]);
+
   return (
     <TooltipProvider>
       <div
@@ -252,11 +301,12 @@ export function EnemSheet() {
               isSignedIn={isSignedIn}
               onSaveDraft={handleSaveDraft}
               onViewEssays={handleViewEssays}
+              isCarregandoEdicao={isCarregandoEdicao}
             />
 
             <div className="flex-1 flex flex-col gap-4">
               <WritingArea
-                tema={tema} // <-- Manda a string
+                tema={tema}
                 onTemaChange={setTema}
                 linhas={linhas}
                 onLinhasChange={setLinhas}
