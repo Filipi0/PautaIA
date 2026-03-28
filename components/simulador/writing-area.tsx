@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import { AlertCircle } from "lucide-react";
-import { useRef, Ref } from "react";
+import { Ref, useState } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Tooltip,
@@ -19,6 +19,8 @@ import { TOTAL_LINES, CHARS_PER_LINE, StructureType, LineStructure, structureCol
 interface WritingAreaProps {
   linhas: string[];
   onLinhasChange: (linhas: string[]) => void;
+  tema: string;
+  onTemaChange: (tema: string) => void;
   lineStructures: LineStructure;
   onToggleLineStructure: (lineIndex: number) => void;
   selectedStructure: StructureType;
@@ -32,6 +34,8 @@ interface WritingAreaProps {
 export function WritingArea({
   linhas,
   onLinhasChange,
+  tema,
+  onTemaChange,
   lineStructures,
   onToggleLineStructure,
   selectedStructure,
@@ -41,6 +45,10 @@ export function WritingArea({
   sheetRef,
   inputsRef,
 }: WritingAreaProps) {
+  // NOVO: Estado para controlar se o "Super Ctrl+A" está ativo
+  const [isAllSelected, setIsAllSelected] = useState(false);
+
+  // --- LÓGICA DE DIGITAÇÃO ---
   const handleInputChange = (index: number, value: string) => {
     const novasLinhas = [...linhas];
 
@@ -67,9 +75,46 @@ export function WritingArea({
     }
   };
 
+  // --- LÓGICA DO TECLADO (INCLUINDO CTRL+A e DELETE) ---
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>, index: number) => {
     const currentRef = inputsRef as any;
 
+    // 1. INTERCEPTA O CTRL+A (ou CMD+A no Mac)
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "a") {
+      e.preventDefault(); // Impede a seleção nativa
+      setIsAllSelected(true); // Ativa a seleção global
+      return;
+    }
+
+    // 2. COMPORTAMENTOS QUANDO TUDO ESTÁ SELECIONADO
+    if (isAllSelected) {
+      // Se apertar Delete ou Backspace, apaga tudo
+      if (e.key === "Backspace" || e.key === "Delete") {
+        e.preventDefault();
+        onLinhasChange(Array(TOTAL_LINES).fill(""));
+        setIsAllSelected(false);
+        currentRef.current?.[0]?.focus(); // Volta o foco pra linha 1
+        return;
+      }
+      
+      // Se digitar qualquer letra normal, apaga tudo e começa pela letra digitada
+      if (e.key.length === 1 && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        const novasLinhas = Array(TOTAL_LINES).fill("");
+        novasLinhas[0] = e.key;
+        onLinhasChange(novasLinhas);
+        setIsAllSelected(false);
+        currentRef.current?.[0]?.focus();
+        return;
+      }
+
+      // Se apertar as setinhas de navegação, apenas desmarca tudo
+      if (["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+        setIsAllSelected(false);
+      }
+    }
+
+    // 3. COMPORTAMENTOS NORMAIS (Tab, Enter, Setas)
     if (e.key === "Tab") {
       e.preventDefault();
       const input = e.currentTarget;
@@ -105,6 +150,77 @@ export function WritingArea({
       e.preventDefault();
       currentRef.current?.[index + 1]?.focus();
     }
+  };
+
+  // --- NOVA LÓGICA DE COLAR (CTRL+V) INTELIGENTE ---
+  const handlePaste = (e: React.ClipboardEvent<HTMLInputElement>, index: number) => {
+    e.preventDefault();
+    const pastedText = e.clipboardData.getData("text").replace(/\r/g, ""); // Limpa caracteres \r chatos do Windows
+    if (!pastedText) return;
+
+    let novasLinhas = [...linhas];
+
+    // Função auxiliar: Quebra blocos de texto respeitando parágrafos e o limite de 80 chars
+    const formatarTextoEmLinhas = (texto: string) => {
+      const result = [];
+      const paragrafos = texto.split('\n');
+      for (const p of paragrafos) {
+        let remaining = p;
+        if (remaining === "") result.push(""); // Mantém parágrafos vazios
+        while (remaining.length > 0) {
+          result.push(remaining.substring(0, CHARS_PER_LINE));
+          remaining = remaining.substring(CHARS_PER_LINE);
+        }
+      }
+      return result;
+    };
+
+    if (isAllSelected) {
+      // Se estava tudo selecionado, o texto colado esmaga a redação inteira
+      const parsedLines = formatarTextoEmLinhas(pastedText);
+      novasLinhas = Array(TOTAL_LINES).fill("");
+      for (let i = 0; i < TOTAL_LINES && i < parsedLines.length; i++) {
+        novasLinhas[i] = parsedLines[i];
+      }
+      setIsAllSelected(false);
+    } else {
+      // Se colou no meio de uma linha, insere o texto, formata o bloco e "empurra" o resto pra baixo
+      const input = e.currentTarget;
+      const cursorStart = input.selectionStart || 0;
+      const cursorEnd = input.selectionEnd || 0;
+
+      const prefix = novasLinhas[index].substring(0, cursorStart);
+      const suffix = novasLinhas[index].substring(cursorEnd);
+
+      const blocoParaFormatar = prefix + pastedText + suffix;
+      const linhasFormatadas = formatarTextoEmLinhas(blocoParaFormatar);
+
+      // Substitui a linha atual pela primeira linha do bloco formatado
+      novasLinhas[index] = linhasFormatadas[0] || "";
+
+      // Insere o restante empurrando as de baixo
+      if (linhasFormatadas.length > 1) {
+        const linhasParaInserir = linhasFormatadas.slice(1);
+        novasLinhas.splice(index + 1, 0, ...linhasParaInserir);
+      }
+
+      // Trunca para garantir que nunca passe de 30 linhas!
+      novasLinhas = novasLinhas.slice(0, TOTAL_LINES);
+    }
+
+    onLinhasChange(novasLinhas);
+    
+    // Foca na última linha que foi afetada pela colagem
+    setTimeout(() => {
+      const currentRef = inputsRef as any;
+      const ultimoIndiceEditado = isAllSelected 
+          ? Math.min(formatarTextoEmLinhas(pastedText).length - 1, TOTAL_LINES - 1)
+          : Math.min(index + formatarTextoEmLinhas(pastedText).length - 1, TOTAL_LINES - 1);
+          
+      if (ultimoIndiceEditado >= 0) {
+        currentRef.current?.[ultimoIndiceEditado]?.focus();
+      }
+    }, 0);
   };
 
   return (
@@ -144,14 +260,41 @@ export function WritingArea({
           </div>
         </div>
 
+        {/* Input de Tema */}
+        <div className={`px-6 py-3 border-b ${darkMode ? "border-zinc-700 bg-zinc-800" : "border-stone-200 bg-white"}`}>
+          <input
+            type="text"
+            placeholder="Digite o tema da redação aqui..."
+            value={tema}
+            onChange={(e) => onTemaChange(e.target.value)}
+            className={`w-full font-bold text-center outline-none bg-transparent transition-colors ${
+              darkMode ? "text-white placeholder:text-zinc-600" : "text-stone-800 placeholder:text-stone-300"
+            }`}
+          />
+        </div>
+
         {/* Writing Area */}
-        <div className="relative px-4 py-6" style={{ containerType: "inline-size" }}>
+        <div 
+          className="relative px-4 py-6" 
+          style={{ containerType: "inline-size" }}
+          // Se o usuário clicar fora dos inputs na área de escrita, cancela a seleção
+          onClick={() => setIsAllSelected(false)} 
+        >
           <div className="relative z-10">
             {linhas.map((linha, index) => {
               const lineNum = index + 1;
               const structure = lineStructures[lineNum - 1];
               const hasText = linha.trim().length > 0;
               const hasError = alertasPorLinha[index] && alertasPorLinha[index].length > 0;
+
+              // Calcula o estilo se o input estiver com o "Ctrl+A" ativado
+              const selecaoAtivaStyles = isAllSelected
+                ? darkMode
+                  ? "bg-blue-400/20 text-blue-100"
+                  : "bg-blue-500/20 text-blue-900"
+                : darkMode
+                  ? "bg-transparent text-zinc-200"
+                  : "bg-transparent text-stone-800";
 
               return (
                 <div
@@ -167,7 +310,10 @@ export function WritingArea({
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <button
-                        onClick={() => onToggleLineStructure(lineNum - 1)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onToggleLineStructure(lineNum - 1);
+                        }}
                         className={`relative z-10 w-8 flex-shrink-0 text-right pr-3 font-mono text-xs transition-colors cursor-pointer hover:opacity-70 ${
                           hasText
                             ? darkMode
@@ -198,11 +344,14 @@ export function WritingArea({
                     value={linha}
                     onChange={(e) => handleInputChange(index, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(e, index)}
+                    onPaste={(e) => handlePaste(e, index)} // <-- NOVO INTERCEPTADOR DE COLAGEM
+                    onClick={(e) => {
+                      e.stopPropagation(); 
+                      setIsAllSelected(false); // Clicou no input? Tira a seleção global
+                    }} 
                     spellCheck={false}
                     onScroll={(e) => (e.currentTarget.scrollLeft = 0)}
-                    className={`flex-1 w-full bg-transparent outline-none font-mono pl-2 pr-8 overflow-hidden ${
-                      darkMode ? "text-zinc-200 caret-blue-400" : "text-stone-800 caret-blue-600"
-                    } ${
+                    className={`flex-1 w-full outline-none font-mono pl-2 pr-8 overflow-hidden caret-blue-600 dark:caret-blue-400 ${selecaoAtivaStyles} ${
                       hasError ? "underline decoration-red-400 decoration-wavy underline-offset-4" : ""
                     }`}
                     style={{

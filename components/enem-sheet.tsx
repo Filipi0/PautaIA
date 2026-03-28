@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
+import { useAuth, useSession, SignInButton, UserButton } from "@clerk/nextjs";
 import { SheetHeader } from "@/components/simulador/sheet-header";
 import { StructureSidebar } from "@/components/simulador/structure-sidebar";
 import { WritingArea } from "@/components/simulador/writing-area";
@@ -10,6 +11,7 @@ import { TOTAL_LINES, StructureType, LineStructure } from "@/components/simulado
 
 export function EnemSheet() {
   // --- ESTADOS PRINCIPAIS ---
+  const [tema, setTema] = useState(""); // <-- ADICIONE O ESTADO DO TEMA AQUI
   const [linhas, setLinhas] = useState<string[]>(Array(TOTAL_LINES).fill(""));
   const [alertasPorLinha, setAlertasPorLinha] = useState<Record<number, any[]>>({});
   const [darkMode, setDarkMode] = useState(false);
@@ -17,7 +19,8 @@ export function EnemSheet() {
   const [selectedStructure, setSelectedStructure] = useState<StructureType>(null);
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const sheetRef = useRef<HTMLDivElement>(null);
-
+  const { isSignedIn } = useAuth();
+  const { session } = useSession(); // <-- Adicione esta linha
   // --- ESTATÍSTICAS ---
   const occupiedLines = linhas.filter((line) => line.trim().length > 0).length;
   const wordCount = linhas.join(" ").trim().split(/\s+/).filter(w => w !== "").length;
@@ -84,6 +87,67 @@ export function EnemSheet() {
     const novosAlertas = { ...alertasPorLinha };
     delete novosAlertas[linhaIdx];
     setAlertasPorLinha(novosAlertas);
+  };
+
+  // --- FUNÇÕES DE PAINEL ---
+  // --- FUNÇÕES DE PAINEL ---
+  const handleSaveDraft = async () => {
+    if (!isSignedIn || !session) {
+      alert("Você precisa fazer login para salvar rascunhos!");
+      return;
+    }
+
+    if (!tema.trim()) {
+      alert("Por favor, digite o tema da redação no cabeçalho antes de salvar.");
+      return;
+    }
+
+    try {
+      // 1. Pega um token JWT novinho direto do Clerk (dura 60s)
+      const token = await session.getToken();
+
+      // 2. Prepara o objeto (payload) igualzinho o Swagger pede
+      const payload = {
+        tema: tema.trim(), // O tema que o usuário digitou
+        linhasFront: linhas,
+        totalLinhas: occupiedLines,
+        totalPalavras: wordCount,
+        totalCaracteres: charCount,
+        structure_map: lineStructures, // Manda as marcações de introdução/conclusão
+      };
+
+      // 3. Faz o POST para o seu backend Express
+      const response = await fetch("http://localhost:4000/redacoes", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}` // <- O crachá de segurança indo aqui!
+        },
+        body: JSON.stringify(payload)
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || "Erro ao salvar redação");
+      }
+
+      alert("🎉 Redação salva com sucesso no banco Neon!");
+      console.log("Resposta do Backend:", data);
+
+    } catch (error: any) {
+      console.error("Erro no salvamento:", error);
+      alert(`Falha ao salvar: ${error.message}`);
+    }
+  };
+
+  const handleViewEssays = () => {
+    if (!isSignedIn) {
+      alert("Você precisa fazer login para ver suas redações!");
+      return;
+    }
+    // Aqui no futuro você pode abrir um Modal com a lista, ou redirecionar de página
+    alert("Pronto para integrar! Carregando lista de redações...");
   };
 
   const clearSheet = () => {
@@ -157,10 +221,15 @@ export function EnemSheet() {
               selectedStructure={selectedStructure}
               onStructureSelect={setSelectedStructure}
               darkMode={darkMode}
+              isSignedIn={isSignedIn}
+              onSaveDraft={handleSaveDraft}
+              onViewEssays={handleViewEssays}
             />
 
             <div className="flex-1 flex flex-col gap-4">
               <WritingArea
+                tema={tema}             // <-- Manda a string
+                onTemaChange={setTema}
                 linhas={linhas}
                 onLinhasChange={setLinhas}
                 lineStructures={lineStructures}
