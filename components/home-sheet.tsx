@@ -3,27 +3,40 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { useAuth, useSession, SignInButton, UserButton } from "@clerk/nextjs";
-import { SheetHeader } from "@/components/simulador/sheet-header";
-import { StructureSidebar } from "@/components/simulador/structure-sidebar";
-import { WritingArea } from "@/components/simulador/writing-area";
-import { SheetFooter } from "@/components/simulador/sheet-footer";
-import { TOTAL_LINES, StructureType, LineStructure } from "@/components/simulador/constants";
+import { SheetHeader } from "@/components/home/sheet-header";
+import { StructureSidebar } from "@/components/home/structure-sidebar";
+import { WritingArea } from "@/components/home/writing-area";
+import { SheetFooter } from "@/components/home/sheet-footer";
+import {
+  TOTAL_LINES,
+  StructureType,
+  LineStructure,
+} from "@/components/home/constants";
+import { useRouter } from "next/navigation"; // <-- 1. ADICIONE ESTA LINHA
 
 export function EnemSheet() {
+  const router = useRouter(); // <-- 2. ADICIONE ESTA LINHA
   // --- ESTADOS PRINCIPAIS ---
   const [tema, setTema] = useState(""); // <-- ADICIONE O ESTADO DO TEMA AQUI
   const [linhas, setLinhas] = useState<string[]>(Array(TOTAL_LINES).fill(""));
-  const [alertasPorLinha, setAlertasPorLinha] = useState<Record<number, any[]>>({});
+  const [alertasPorLinha, setAlertasPorLinha] = useState<Record<number, any[]>>(
+    {},
+  );
   const [darkMode, setDarkMode] = useState(false);
   const [lineStructures, setLineStructures] = useState<LineStructure>({});
-  const [selectedStructure, setSelectedStructure] = useState<StructureType>(null);
+  const [selectedStructure, setSelectedStructure] =
+    useState<StructureType>(null);
   const inputsRef = useRef<(HTMLInputElement | null)[]>([]);
   const sheetRef = useRef<HTMLDivElement>(null);
   const { isSignedIn } = useAuth();
   const { session } = useSession(); // <-- Adicione esta linha
   // --- ESTATÍSTICAS ---
   const occupiedLines = linhas.filter((line) => line.trim().length > 0).length;
-  const wordCount = linhas.join(" ").trim().split(/\s+/).filter(w => w !== "").length;
+  const wordCount = linhas
+    .join(" ")
+    .trim()
+    .split(/\s+/)
+    .filter((w) => w !== "").length;
   const charCount = linhas.join("").length;
 
   // --- INTEGRAÇÃO LANGUAGETOOL ---
@@ -36,13 +49,20 @@ export function EnemSheet() {
 
     const delayDebounceFn = setTimeout(async () => {
       try {
-        const response = await fetch("https://api.languagetoolplus.com/v2/check", {
-          method: "POST",
-          headers: { "Content-Type": "application/x-www-form-urlencoded" },
-          body: new URLSearchParams({ text: textoCompleto, language: "pt-BR", level: "picky" }),
-        });
+        const response = await fetch(
+          "https://api.languagetoolplus.com/v2/check",
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/x-www-form-urlencoded" },
+            body: new URLSearchParams({
+              text: textoCompleto,
+              language: "pt-BR",
+              level: "picky",
+            }),
+          },
+        );
         const data = await response.json();
-        
+
         const novosAlertas: Record<number, any[]> = {};
         let charAcumulado = 0;
 
@@ -55,19 +75,23 @@ export function EnemSheet() {
               if (!novosAlertas[idx]) novosAlertas[idx] = [];
               novosAlertas[idx].push({
                 ...match,
-                textoErro: linha.substring(match.offset - inicioLinha, (match.offset - inicioLinha) + match.length)
+                textoErro: linha.substring(
+                  match.offset - inicioLinha,
+                  match.offset - inicioLinha + match.length,
+                ),
               });
             }
           });
           charAcumulado += linha.length + 1;
         });
         setAlertasPorLinha(novosAlertas);
-      } catch (err) { console.error(err); }
+      } catch (err) {
+        console.error(err);
+      }
     }, 1500);
 
     return () => clearTimeout(delayDebounceFn);
   }, [linhas]);
-
 
   const toggleLineStructure = (lineIndex: number) => {
     if (selectedStructure) {
@@ -79,7 +103,11 @@ export function EnemSheet() {
     }
   };
 
-  const aplicarSugestao = (linhaIdx: number, erro: string, sugestao: string) => {
+  const aplicarSugestao = (
+    linhaIdx: number,
+    erro: string,
+    sugestao: string,
+  ) => {
     const novasLinhas = [...linhas];
     novasLinhas[linhaIdx] = novasLinhas[linhaIdx].replace(erro, sugestao);
     setLinhas(novasLinhas);
@@ -98,7 +126,9 @@ export function EnemSheet() {
     }
 
     if (!tema.trim()) {
-      alert("Por favor, digite o tema da redação no cabeçalho antes de salvar.");
+      alert(
+        "Por favor, digite o tema da redação no cabeçalho antes de salvar.",
+      );
       return;
     }
 
@@ -121,9 +151,9 @@ export function EnemSheet() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${token}` // <- O crachá de segurança indo aqui!
+          Authorization: `Bearer ${token}`, // <- O crachá de segurança indo aqui!
         },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(payload),
       });
 
       const data = await response.json();
@@ -134,7 +164,6 @@ export function EnemSheet() {
 
       alert("🎉 Redação salva com sucesso no banco Neon!");
       console.log("Resposta do Backend:", data);
-
     } catch (error: any) {
       console.error("Erro no salvamento:", error);
       alert(`Falha ao salvar: ${error.message}`);
@@ -146,8 +175,7 @@ export function EnemSheet() {
       alert("Você precisa fazer login para ver suas redações!");
       return;
     }
-    // Aqui no futuro você pode abrir um Modal com a lista, ou redirecionar de página
-    alert("Pronto para integrar! Carregando lista de redações...");
+    router.push("/dashboard");
   };
 
   const clearSheet = () => {
@@ -228,7 +256,7 @@ export function EnemSheet() {
 
             <div className="flex-1 flex flex-col gap-4">
               <WritingArea
-                tema={tema}             // <-- Manda a string
+                tema={tema} // <-- Manda a string
                 onTemaChange={setTema}
                 linhas={linhas}
                 onLinhasChange={setLinhas}

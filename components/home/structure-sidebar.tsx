@@ -1,14 +1,14 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { AlignLeft, Save, Library } from "lucide-react"; // Importamos novos ícones
+import { AlignLeft, Save, Library } from "lucide-react";
 import { StructureType, structureColors } from "./constants";
 
 interface StructureSidebarProps {
   selectedStructure: StructureType;
   onStructureSelect: (type: StructureType) => void;
   darkMode: boolean;
-  isSignedIn?: boolean; // Recebe o status de login do pai
+  isSignedIn?: boolean;
   onSaveDraft: () => void;
   onViewEssays: () => void;
 }
